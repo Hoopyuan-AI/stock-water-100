@@ -1,0 +1,8 @@
+__pycache__/
+*.pyc
+water_output/*.xlsx
+water_output/*.html
+water_output/*.csv
+water_output/離線五檔驗證/
+public_site/
+*.log
