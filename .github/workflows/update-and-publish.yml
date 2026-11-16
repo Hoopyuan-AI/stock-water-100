@@ -1,0 +1,69 @@
+name: Refresh Taiwan Top 100 Water Dashboard
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/update-and-publish.yml'
+      - 'stock_water_100.py'
+      - 'stock_water_5.py'
+      - 'build_site.py'
+  schedule:
+    # Taiwan time: 15:10, Monday through Friday. Exchange holidays produce
+    # the last available trading date, which the HTML displays explicitly.
+    - cron: '10 15 * * 1-5'
+      timezone: Asia/Taipei
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+concurrency:
+  group: water-dashboard-publish
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - name: Check out repository with stored history
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: true
+      - name: Install Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Check rules and ranking parser
+        run: python stock_water_100.py --self-test
+      - name: Download rankings and prices, update history, generate report
+        run: python -u stock_water_100.py --output water_output --workers 3 --backfill 25
+      - name: Validate and prepare static website
+        run: python build_site.py
+      - name: Save updated historical records for next run
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add water_output/data/
+          if ! git diff --cached --quiet; then
+            git commit -m "Update water-temperature historical records [skip ci]"
+            git push
+          else
+            echo "No historical changes"
+          fi
+      - name: Configure GitHub Pages
+        uses: actions/configure-pages@v5
+      - name: Upload static website
+        uses: actions/upload-pages-artifact@v4
+        with:
+          path: public_site
+      - name: Publish website
+        id: deploy
+        uses: actions/deploy-pages@v4
